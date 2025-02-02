@@ -98,8 +98,7 @@ class Otpless {
 
     js.context['getResponse'] = (String? message) {
       if (functionName == 'verifyAuth') {
-        if (message != null &&
-            jsonDecode(message)["responseType"] == "ONETAP") {
+        if (message != null) {
           onHeadlessResult(message);
         }
       } else {
