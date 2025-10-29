@@ -95,16 +95,8 @@ class Otpless {
     if (!kIsWeb) return;
 
     js.context.callMethod(functionName, arguments);
-
-    js.context['getResponse'] = (String? message) {
-      if (functionName == 'verifyAuth') {
-        if (message != null &&
-            jsonDecode(message)["responseType"] == "ONETAP") {
-          onHeadlessResult(message);
-        }
-      } else {
-        onHeadlessResult(message);
-      }
+    js.context['getResponse'] = (String? response) {
+      onHeadlessResult(response);
     };
   }
 }
