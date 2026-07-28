@@ -28,3 +28,7 @@ migrate_working_dir/
 .dart_tool/
 .packages
 
+
+# Build output — was committed historically; see CLAUDE.md working rules.
+/build/
+example/build/

@@ -1,0 +1,61 @@
+name: Build & Test
+
+# Runs the repo's canonical verification gate. The gate is defined in exactly one
+# place — the Makefile — and this workflow deliberately does not restate its
+# steps, so CI and a local `make gate` cannot drift apart.
+#
+# Chrome is required, not optional: this package imports `dart:html` and
+# `dart:js`, so the Dart VM cannot compile its tests. `flutter test` without
+# --platform chrome fails to LOAD. ubuntu-latest ships Chrome preinstalled.
+#
+# Scope warning, restated from CLAUDE.md Article VI: every test stubs the OTPLESS
+# browser bundle (https://otpless.com/v2/flutter.js). Nothing here loads it or
+# reaches the OTPLESS backend, and there are no widget or integration tests.
+# Green means the JS-interop marshalling did not regress — it is not a coverage
+# claim and not evidence that authentication works.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: make gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: subosito/flutter-action@f2c4f6686ca8e8d6e6d0f28410eeef506ed66aff # v2.18.0
+        with:
+          channel: stable
+          cache: true
+
+      - name: Report toolchain
+        run: flutter --version
+
+      - name: Install dependencies
+        run: make install
+
+      - name: Run the gate (format + analyze + tests + surface goldens)
+        run: make gate
+        env:
+          CHROME_EXECUTABLE: /usr/bin/google-chrome
+
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Lint workflow files
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color

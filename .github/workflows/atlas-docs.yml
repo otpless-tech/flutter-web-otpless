@@ -1,0 +1,38 @@
+name: Atlas Docs
+
+# Platform documentation for this SDK does NOT live in this repo — there is no
+# docs/ directory to keep in sync. It lives in the private `otpless-tech/atlas`
+# repo, and these two reusable-workflow calls are the wiring:
+#
+#   verify (on PR)    — checks the docs in atlas against this PR's source, so a
+#                       public-API change cannot merge while the docs still
+#                       describe the old surface.
+#   sync   (on push)  — pushes the merged state onward to atlas.
+#
+# Both jobs need ATLAS_PAT: atlas is private, so neither the verify nor the sync
+# side can read it with the default GITHUB_TOKEN.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    if: github.event_name == 'pull_request'
+    uses: otpless-tech/atlas/.github/workflows/verify-docs.yml@main
+    with:
+      source_repo: flutter-web-otpless
+      source_sha: "${{ github.event.pull_request.head.sha }}"
+    secrets:
+      ATLAS_PAT: "${{ secrets.ATLAS_PAT }}"
+
+  sync:
+    if: github.event_name == 'push'
+    uses: otpless-tech/atlas/.github/workflows/sync-from-source.yml@main
+    with:
+      source_repo: flutter-web-otpless
+      source_ref: "${{ github.sha }}"
+    secrets:
+      ATLAS_PAT: "${{ secrets.ATLAS_PAT }}"
