@@ -1,0 +1,37 @@
+name: Atlas sync
+
+# This repository does not carry a docs/ directory. Its platform documentation
+# lives in otpless-tech/atlas, and this workflow keeps the page Atlas generates
+# from this repo's source current on every merge to main.
+#
+# PUSH, deliberately. Atlas does not read this repository; this repository writes
+# its own page. A workflow cannot read another private repo, so the alternative —
+# Atlas pulling — would need one credential with read access to all 29
+# repositories. Here the only secret needed is ATLAS_SYNC_TOKEN with
+# contents:write on otpless-tech/atlas alone; this repo is read by the workflow's
+# own GITHUB_TOKEN, which already has that access and needs no secret.
+#
+# If the secret is absent the job SKIPS with a visible warning rather than
+# failing, so a missing credential never blocks a merge here. Atlas's own
+# scheduled job is the single place designated to go red for that.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: atlas-sync-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    uses: otpless-tech/atlas/.github/workflows/sync-repo-page.yml@main
+    with:
+      source_repo: flutter-web-otpless
+      hub_path: frontend/web/flutter-web-otpless
+    secrets:
+      ATLAS_SYNC_TOKEN: ${{ secrets.ATLAS_SYNC_TOKEN }}
