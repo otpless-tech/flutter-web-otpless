@@ -1,0 +1,14 @@
+# flutter analyze baseline — GENERATED, regenerate with: make analyze-update
+# File:line:column coordinates are stripped on purpose.
+#
+# These are INFOS, deliberately not suppressed. The dart:html / dart:js
+# deprecations are this package's biggest piece of technical debt: it
+# needs a package:web + dart:js_interop rewrite. See CLAUDE.md.
+info • 'dart:html' is deprecated and shouldn't be used. Use package:web and dart:js_interop instead. Try replacing the use of the deprecated member with the replacement • lib/src/otpless_web.dart • deprecated_member_use
+info • 'dart:js' is deprecated and shouldn't be used. Use dart:js_interop instead. Try replacing the use of the deprecated member with the replacement • lib/src/otpless_web.dart • deprecated_member_use
+info • 'dart:js' is deprecated and shouldn't be used. Use dart:js_interop instead. Try replacing the use of the deprecated member with the replacement • test/otpless_flutter_web_test.dart • deprecated_member_use
+info • Can't use a relative path to import a library in 'lib'. Try fixing the relative path or changing the import to a 'package:' import • example/test/widget_test.dart • avoid_relative_lib_imports
+info • Don't invoke 'print' in production code. Try using a logging framework • example/lib/main.dart • avoid_print
+info • Don't use web-only libraries outside Flutter web plugins. Try finding a different library for your needs • lib/src/otpless_web.dart • avoid_web_libraries_in_flutter
+info • Don't use web-only libraries outside Flutter web plugins. Try finding a different library for your needs • lib/src/otpless_web.dart • avoid_web_libraries_in_flutter
+info • Don't use web-only libraries outside Flutter web plugins. Try finding a different library for your needs • test/otpless_flutter_web_test.dart • avoid_web_libraries_in_flutter

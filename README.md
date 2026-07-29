@@ -1,30 +1,50 @@
-<!--
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# otpless_flutter_web
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/guides/libraries/writing-package-pages).
+OTPLESS authentication for **Flutter web** applications: phone/email OTP, magic
+link, and OAuth sign-in, driven by the OTPLESS browser SDK.
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-library-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/developing-packages).
--->
+pub.dev: [`otpless_flutter_web`](https://pub.dev/packages/otpless_flutter_web)
 
-# Flutter
+> ### Release status — read before you depend on this
+>
+> The latest published version is **1.2.6, published 2024-05-21**. There has been
+> **no release in over two years**, and `main` is the same tree that produced it.
+> If you are choosing an OTPLESS integration today, take that into account.
+>
+> This note is here because it is a fact merchants deserve to see in the place
+> they look first, not because anything is known to be broken.
 
-Integrating One Tap OTPLESS Sign In into your Flutter Website using our SDK is a streamlined process. This guide offers a comprehensive walkthrough, detailing the steps to install the SDK and seamlessly retrieve user information.
+> ### This is the web package, not the mobile one
+>
+> For Flutter **mobile** (Android/iOS) use
+> [`otpless_headless_flutter`](https://pub.dev/packages/otpless_headless_flutter)
+> instead. It is a different package with a different API and a different
+> response contract.
 
-1. Install **OTPless SDK** Dependency
+---
 
+## How it works
+
+This package is a thin `dart:js` bridge — about 110 lines. It contains no
+authentication logic. All of that lives in a browser script **you load
+yourself**, which installs a handful of functions on `window`; this package calls
+them and installs one callback (`window.getResponse`) to receive replies.
+
+That has one practical consequence worth knowing up front: if the script tag is
+missing or misconfigured, calls to this package currently **fail silently** — no
+exception, no callback. See [Troubleshooting](#troubleshooting).
+
+## Install
+
+```bash
+flutter pub add otpless_flutter_web
 ```
-flutter pub add otpless_flutter_web:1.2.6
-```
 
-2. Initialize Otpless in index.html
+## Set up: add the OTPLESS script to `web/index.html`
+
+This step is **required**. Without it nothing works.
 
 ```html
-<!-- Add this script to initiate otpless -->
 <script
   data-appid="{YOUR_APP_ID}"
   src="https://otpless.com/v2/flutter.js"
@@ -34,79 +54,187 @@ flutter pub add otpless_flutter_web:1.2.6
 ></script>
 ```
 
-3. Configure **Sign up/Sign in**
+All four attributes matter: `data-appid` identifies your OTPLESS app, `id` is how
+the bundle finds its own tag, and `variant="HEADLESS"` selects the headless flow.
+Omit `variant` and you get the hosted login-page flow instead.
 
-- Import the following classes.
+## Usage
 
 ```dart
 import 'package:otpless_flutter_web/otpless_flutter_web.dart';
+
+final _otpless = Otpless();
 ```
 
-- Add this code to your initState() method
+### 1. Subscribe to results
+
+Do this once, in `initState`. `headlessResponse` is the channel through which
+**all** responses arrive — including failures that `verifyAuth` itself will not
+report to you (see [Troubleshooting](#troubleshooting)).
 
 ```dart
 @override
 void initState() {
-  _otplessFlutterPlugin.headlessRespons(onHeadlessResult);
   super.initState();
+  _otpless.headlessResponse(onOtplessResult);
+}
+
+void onOtplessResult(dynamic result) {
+  // `result` is a JSON *String*, not a Map. Decode it yourself:
+  //   final data = jsonDecode(result as String);
+  //   data['responseType'], data['statusCode'], data['response'], data['success']
+  setState(() => _lastResponse = result);
 }
 ```
 
-- Add this code to handle callback response
+### 2. Phone or email OTP
 
 ```dart
-void onHeadlessResult(dynamic result) {
-  setState(() {
-    dataResponse = result;
-  });
-}
+// Send the OTP
+_otpless.initiatePhoneAuth(onOtplessResult, {
+  'phone': '9876543210',
+  'countryCode': '91',       // no leading '+'
+});
+
+_otpless.initiateEmailAuth(onOtplessResult, {
+  'email': 'user@example.com',
+});
+
+// Verify it — pass the same identity plus the code
+_otpless.verifyAuth(onOtplessResult, {
+  'phone': '9876543210',
+  'countryCode': '91',
+  'otp': '123456',
+});
 ```
 
-- Add this code for OAUTH Authentication
+`initiatePhoneAuth` and `initiateEmailAuth` add `"channel": "PHONE"` / `"EMAIL"`
+to the payload for you. `verifyAuth` adds **nothing** — pass every field the
+request needs.
+
+### 3. OAuth
 
 ```dart
-void initiateOAuth(String channelType) async {
-  _otplessFlutterPlugin.initiateOAuth(onHeadlessResult, channelType);
-}
+_otpless.initiateOAuth(onOtplessResult, 'GMAIL');       // or 'TRUE_CALLER', etc.
 ```
 
-- Add this code for PHONE/EMAIL Authentication
+The channel type string is sent as `{"channelType": "<value>", "channel": "OAUTH"}`.
+
+### 4. Hosted login page (non-headless)
 
 ```dart
-void initiatePhoneEmailAuth() async {
-  Map<String, dynamic> arg = {};
-  if (otpContoller.text.isNotEmpty) {
-    if (phoneNumberContoller.text.isNotEmpty) {
-      arg["phone"] = phoneNumberContoller.text;
-      arg["countryCode"] = "91";
-    } else {
-      arg["email"] = emailContoller.text;
-    }
+_otpless.openLoginPage(onOtplessResult);
+```
 
-    arg["otp"] = otpContoller.text;
+Drop the `variant="HEADLESS"` attribute from the script tag when using this.
 
-    _otplessFlutterPlugin.verifyAuth(onHeadlessResult, arg);
-  } else {
-    if (phoneNumberContoller.text.isNotEmpty) {
-      arg["phone"] = phoneNumberContoller.text;
-      arg["countryCode"] = "91";
+## API
 
-      _otplessFlutterPlugin.initiatePhoneAuth(onHeadlessResult, arg);
-    } else if (emailContoller.text.isNotEmpty) {
-      arg["email"] = emailContoller.text;
+| Member | Signature |
+|---|---|
+| `Otpless()` | Constructor. **Side effect:** if the page URL carries a `code` query parameter, it calls `headlessResponse` internally. |
+| `headlessResponse` | `void headlessResponse(OtplessResultCallback cb)` — subscribe to results (calls `window.startHeadless`). |
+| `initiatePhoneAuth` | `void initiatePhoneAuth(OtplessResultCallback cb, Map<String, dynamic> request)` |
+| `initiateEmailAuth` | `void initiateEmailAuth(OtplessResultCallback cb, Map<String, dynamic> request)` |
+| `initiateOAuth` | `void initiateOAuth(OtplessResultCallback cb, String channelType)` |
+| `verifyAuth` | `void verifyAuth(OtplessResultCallback cb, dynamic data)` |
+| `openLoginPage` | `void openLoginPage(OtplessResultCallback cb)` |
+| `getCodeForParams` | `String? getCodeForParams()` — reads the `code` query parameter from the page URL. |
+| `OtplessResultCallback` | `void Function(dynamic)` — receives a JSON **String**. |
 
-      _otplessFlutterPlugin.initiateEmailAuth(onHeadlessResult, arg);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Please enter phone number or email"),
-        ),
-      );
-    }
-  }
+Every method returns `void` and is fire-and-forget; results arrive on the
+callback. On non-web platforms every method is a no-op.
+
+## Response shape
+
+Responses arrive as a JSON string of roughly:
+
+```json
+{
+  "responseType": "ONETAP",
+  "response": { "token": "..." },
+  "statusCode": 200,
+  "success": true
 }
 ```
 
-# Thank You
+> **If you are porting from the OTPLESS Android or iOS SDK:** the web contract is
+> **not** the native one. `success` is web-only — no native SDK sends it — and
+> `response` may be absent. `SESSION_END` and `LOADING_STATE` are web-only event
+> types, while seven native response types (`INITIATE`, `VERIFY`, `SDK_READY`,
+> `DELIVERY_STATUS`, `AUTH_TERMINATED`, `MFA_FACTOR_COMPLETED`,
+> `AUTO_FLOW_ACTION`) do not appear on web. Web channels are the three coarse
+> buckets `PHONE` / `EMAIL` / `OAUTH`. Do not assume payloads match.
 
-# [Visit OTPless](https://otpless.com/platforms/flutter)
+## Troubleshooting
+
+**Nothing happens when I call `initiatePhoneAuth` — no error, no callback.**
+Almost always a missing or misconfigured script tag in `web/index.html`. This is
+the package's worst behaviour: the underlying `NoSuchMethodError` is routed to a
+Zone rather than to you, so it is invisible. Check, in order:
+
+1. the `<script>` tag is present and `id="otpless-sdk"`;
+2. `data-appid` is your real app id;
+3. `variant="HEADLESS"` is present if you are using the headless methods;
+4. the browser devtools Network tab shows `flutter.js` loading with 200;
+5. `window.initiateAuth` is defined in the devtools console.
+
+**A wrong OTP produces no callback.** `verifyAuth` only forwards responses whose
+`responseType` is `ONETAP`. Failures reach you through the `headlessResponse`
+subscription instead — so always subscribe with `headlessResponse` in
+`initState`, not only per call.
+
+**Two requests in flight and the wrong callback fires.** There is one global
+callback slot, so the newest call wins. Serialise your requests.
+
+## Example
+
+`example/` is a runnable demo:
+
+```bash
+cd example
+flutter run -d chrome
+```
+
+## Development
+
+Requires Flutter (stable) and **Chrome** — this package imports `dart:html` and
+`dart:js`, so the Dart VM cannot compile it, and a bare `flutter test` fails to
+*load*. Always use `--platform chrome`, or just use the Makefile.
+
+```bash
+make install
+make gate        # THE verification gate — run this before every PR
+```
+
+`make gate` runs:
+
+| Step | Command | Protects |
+|---|---|---|
+| format | `dart format --set-exit-if-changed .` | formatting |
+| analyze | `scripts/check-analyzer-baseline.sh` | `flutter analyze` (errors/warnings fatal) + no new analyzer infos |
+| test | `flutter test --platform chrome` | 11 unit tests |
+| surface | `dart run tool/api_dump.dart` | the public Dart surface **and** the `window` function names, both committed as goldens under `api/` |
+
+Other targets: `make format-fix`, `make surface-update`, `make analyze-update`,
+`make example-build`, `make help`.
+
+**What a green gate does not tell you.** Every test stubs the browser bundle.
+Nothing here loads `https://otpless.com/v2/flutter.js` or reaches the OTPLESS
+backend, and there are no widget or integration tests. Green means the JS-interop
+marshalling did not regress — it is not a coverage claim and not evidence that
+authentication works.
+
+Contributors: read [`CLAUDE.md`](./CLAUDE.md) first. It is the binding
+constitution for this repo, and it lists the known defects you should not be
+surprised by.
+
+## Links
+
+- [OTPLESS Flutter platform docs](https://otpless.com/platforms/flutter)
+- [pub.dev package](https://pub.dev/packages/otpless_flutter_web)
+- [`CHANGELOG.md`](./CHANGELOG.md)
+
+## License
+
+MIT — see [LICENSE](./LICENSE).

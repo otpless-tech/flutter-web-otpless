@@ -1,0 +1,64 @@
+name: Atlas docs
+
+# This repository does not carry a docs/ directory. Its platform documentation
+# lives in otpless-tech/atlas. This workflow does BOTH halves of keeping that
+# true, and both are needed:
+#
+#   verify (on PR)     fails the PR if the Atlas page this repo owns has fallen
+#                      behind the PR head. This replaces the doc fact-checking
+#                      that an in-repo docs-verify.sh used to do inside `make
+#                      gate` — the repo cannot do it itself any more, because it
+#                      no longer has the document.
+#
+#   sync (on merge)    regenerates that page from the merged source and commits
+#                      it to Atlas.
+#
+# Dropping verify and keeping only sync would mean documentation is updated but
+# never *checked* — a PR could describe behaviour the code does not have and
+# nothing would object until the next sync silently overwrote it.
+#
+# SYNC IS PUSH, NOT PULL, and the direction is what keeps the credential small.
+# A GITHUB_TOKEN is scoped to the repo it runs in, so having Atlas read every
+# source repo would need one secret with read access to all 29 private
+# repositories. Instead this repo reads ITSELF with the workflow's own
+# github.token — which already has that access, no secret — and the only secret
+# is ATLAS_SYNC_TOKEN with contents:write on otpless-tech/atlas alone. Write
+# implies read, so the same token serves verify. If it leaks, the worst case is a
+# bad commit to a documentation repo.
+#
+# Both jobs SKIP with a visible warning when the secret is absent, rather than
+# failing: one unset org secret must not block merges in 29 repositories. Atlas's
+# own scheduled job is the single place designated to go red for that gap.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: atlas-docs-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.event_name == 'pull_request'
+    uses: otpless-tech/atlas/.github/workflows/verify-docs.yml@main
+    with:
+      source_repo: flutter-web-otpless
+      source_sha: ${{ github.event.pull_request.head.sha }}
+    secrets:
+      ATLAS_PAT: ${{ secrets.ATLAS_SYNC_TOKEN }}
+
+  sync:
+    if: github.event_name != 'pull_request'
+    uses: otpless-tech/atlas/.github/workflows/sync-repo-page.yml@main
+    with:
+      source_repo: flutter-web-otpless
+      hub_path: frontend/web/flutter-web-otpless
+    secrets:
+      ATLAS_SYNC_TOKEN: ${{ secrets.ATLAS_SYNC_TOKEN }}
